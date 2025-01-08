@@ -18,7 +18,7 @@
 
         # base packages required for building and running go projects.
         base = [
-          pkgs.go_1_23
+          pkgs.go_1_23.env
         ];
 
         # extra packages for development.
@@ -48,6 +48,7 @@
       in {
         overlay = final: prev: {
           setup = setup;
+          prev = prev;
         };
 
         devShells.default = seed;
