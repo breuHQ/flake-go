@@ -23,6 +23,7 @@
       # Extra packages for development.
       dev = [
         pkgs.protobuf
+        (pkgs.callPackage ./pkgs/air.nix {inherit buildGoModule;})
         (pkgs.callPackage ./pkgs/buf.nix {inherit buildGoModule;})
         (pkgs.callPackage ./pkgs/go-task.nix {inherit buildGoModule;})
         (pkgs.callPackage ./pkgs/golangci-lint.nix {inherit buildGoModule;})

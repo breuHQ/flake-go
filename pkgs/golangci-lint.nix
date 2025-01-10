@@ -15,10 +15,6 @@ buildGoModule rec {
   };
 
   vendorHash = "sha256-SEoF+k7MYYq81v9m3eaDbIv1k9Hek5iAZ0TTJEgAsI4=";
-
-  # proxyVendor = true;
-
-  doCheck = false;
   subPackages = ["."];
 
   ldflags = ["-s" "-w" "-X main.version=${version}"];
