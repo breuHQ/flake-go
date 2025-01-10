@@ -1,5 +1,5 @@
 {
-  description = "A very basic flake";
+  description = "breu.io go flake overlay for development";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
@@ -10,62 +10,63 @@
     nixpkgs,
     flake-utils,
     ...
-  }: let
-    systems = ["x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin"];
-    outputs = flake-utils.lib.eachSystem systems (system: let
-      pkgs = import nixpkgs {inherit system;};
-      buildGoModule = pkgs.buildGo123Module;
-    in rec {
-      base = [
-        pkgs.go_1_23
-      ];
+  }:
+    flake-utils.lib.eachDefaultSystem (
+      system: let
+        # Import nixpkgs for the current system.
+        pkgs = import nixpkgs {inherit system;};
+        # Get the go module builder.
+        buildGoModule = pkgs.buildGo123Module;
 
-      # Extra packages for development.
-      dev = [
-        pkgs.protobuf
-        (pkgs.callPackage ./pkgs/air.nix {inherit buildGoModule;})
-        (pkgs.callPackage ./pkgs/buf.nix {inherit buildGoModule;})
-        (pkgs.callPackage ./pkgs/go-task.nix {inherit buildGoModule;})
-        (pkgs.callPackage ./pkgs/golangci-lint.nix {inherit buildGoModule;})
-      ];
+        # Base packages required for building and running go projects.
+        base = [
+          pkgs.go_1_23
+        ];
 
-      # Helper functions to extend base and dev packages.
-      setup = {
-        # `setup.base` takes a list of packages `ext` and prepends them to the base packages.
-        # For example: `setup.base [pkgs.delve]` would return `[pkgs.delve pkgs.go_1_23]`.
-        base = ext:
-          ext ++ base;
+        # Extra packages for development.
+        dev = [
+          pkgs.protobuf
+          (pkgs.callPackage ./pkgs/air.nix {inherit buildGoModule;})
+          (pkgs.callPackage ./pkgs/buf.nix {inherit buildGoModule;})
+          (pkgs.callPackage ./pkgs/go-task.nix {inherit buildGoModule;})
+          (pkgs.callPackage ./pkgs/golangci-lint.nix {inherit buildGoModule;})
+        ];
 
-        # `setup.shell` takes a list of base packages, a list of extra packages `ext`, and an attrset `env` of environment variables.
-        # It creates a development shell environment with all provided packages and environment variables.
-        # For example: `setup.shell base [pkgs.gotools] { MY_VAR = "test"; }`
-        # would return a development shell with go, delve, protobuf, golangci-lint, buf, and gotools installed and `MY_VAR` set to `"test"`.
-        shell = base: ext: env:
-          pkgs.mkShell {
-            nativeBuildInputs = [pkgs.pkgconf]; # required for building some go packages.
-            buildInputs = base;
-            packages = dev ++ ext;
+        # Helper functions to extend base and dev packages.
+        setup = {
+          # `setup.base` takes a list of packages `ext` and prepends them to the base packages.
+          # For example: `setup.base [pkgs.delve]` would return `[pkgs.delve pkgs.go_1_23]`.
+          base = ext:
+            ext ++ base;
 
-            shellHook = ''
-              echo "Development environment loaded."
-              export GOROOT="${pkgs.go_1_23}/share/go"
-            '';
+          # `setup.shell` takes a list of base packages, a list of extra packages `ext`, and an attrset `env` of environment variables.
+          # It creates a development shell environment with all provided packages and environment variables.
+          # For example: `setup.shell base [pkgs.gotools] { MY_VAR = "test"; }`
+          # would return a development shell with go, delve, protobuf, golangci-lint, buf, and gotools installed and `MY_VAR` set to `"test"`.
+          shell = base: ext: env:
+            pkgs.mkShell {
+              nativeBuildInputs = [pkgs.pkgconf]; # required for building some go packages.
+              buildInputs = base;
+              packages = dev ++ ext;
 
-            inherit env;
-          };
-      };
+              shellHook = ''
+                echo "Development environment loaded."
+                export GOROOT="${pkgs.go_1_23}/share/go"  # Correctly set GOROOT
+              '';
 
-      # Seed shell environment with base packages and no extra packages or environment variables.
-      seed = setup.shell base [] {};
+              inherit env;
+            };
+        };
 
-      devShells.default = seed;
-    });
-  in
-    outputs
-    // {
-      overlay = final: prev: {
-        setup = outputs.setup;
-        prev = prev;
-      };
-    };
+        # Seed shell environment with base packages and no extra packages or environment variables.
+        seed = setup.shell base [] {};
+      in {
+        overlay = final: prev: {
+          setup = setup;
+          prev = prev;
+        };
+
+        devShells.default = seed;
+      }
+    );
 }
