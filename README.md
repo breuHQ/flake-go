@@ -12,6 +12,7 @@ Designed as an overlay for import into other Go projects, it provides helper fun
 *   **Customizable**: Easily extendable with more packages and tools.
 *   **Shell Environment**: Provides a consistent shell environment for Go development with helper functions to allow customization.
 *   **Overlay Based**: Can be imported into other Nix flakes.
+*   **Simplified `setup`**: Now `setup.base` and `setup.shell` are accessed directly through the `overlay` attribute, making usage cleaner.
 
 ## Extending the Environment
 
@@ -100,4 +101,3 @@ nix profile install .#quantm
 ```
 
 This makes the `quantm` binary accessible directly from the terminal through your `$PATH`.
-```
