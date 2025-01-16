@@ -20,48 +20,68 @@ Let's examine how to include it in a project with a `cmd/quantm` Go binary that 
 
 ```nix
 {
-  description = "Project using the breu.io go flake";
+  description = "project using breuhq/flake-go";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05"; # Keep this consistent with the breu.io flake
-    breu-go.url = "github:breuhq/flake-go";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
     flake-utils.url = "github:numtide/flake-utils";
+
+    breu.url = "github:breuhq/flake-go";
   };
 
-  outputs = { self, nixpkgs, breu-go, flake-utils, ... }:
+  outputs = {
+    nixpkgs,
+    breu,
+    flake-utils,
+    ...
+  }:
     flake-utils.lib.eachDefaultSystem (
-      system:
-        let
-          pkgs = import nixpkgs { inherit system; };
+      system: let
+        pkgs = import nixpkgs {inherit system;};
+        buildGoModule = pkgs.buildGo123Module;
 
-          # Add libgit2 to the base environment
-          base = breu-go.overlay.setup.base [
-            pkgs.libgit2
-          ];
+        # Apply the breu-go overlay to get access to go tooling
+        pkgs_ = pkgs.extend (final: prev: breu.overlay.${system} final prev);
 
-          # Set up the development shell with our base packages
-          shell = breu-go.overlay.setup.shell base [];
+        # Base packages required for building and running quantm
+        base = pkgs_.setup.base [
+          pkgs.openssl
+          pkgs.http-parser
+          pkgs.zlib
+          pkgs.python3 # required for http-parser in libgit2
+          pkgs.libgit2
+        ];
 
-          # Define how to build the quantm binary
-          quantm = pkgs.stdenv.mkDerivation {
-              name = "quantm";
-              src = ./.;
-              buildInputs = base;
+        # Development packages for use in the dev shell
+        dev = [
+          pkgs.libpg_query # FIXME: probably not required anymore.
+          (pkgs.callPackage ./tools/nix/sqlc.nix {inherit buildGoModule;})
+        ];
 
-              buildPhase = ''
-                go build -tags static -o $out/bin/quantm ./cmd/quantm
-              '';
+        # Set up the development shell with our base and dev packages
+        shell = pkgs_.setup.shell base dev {};
 
-              installPhase = ''
-                mkdir -p $out/bin
-                cp $out/bin/quantm $out/bin
-              '';
-          };
-        in
-          {
-            devShells.default = shell;
-            packages.quantm = quantm;
-          }
+        # Build the quantm binary
+        quantm = pkgs.stdenv.mkDerivation {
+          name = "quantm";
+          src = ./.;
+
+          nativeBuildInputs = base;
+
+          buildPhase = ''
+            export GOROOT="${pkgs.go_1_23}/share/go"
+            go build -x -tags static,system_libgit2 -o $out/bin/quantm ./cmd/quantm
+          '';
+
+          installPhase = ''
+            mkdir -p $out/bin
+            cp $out/bin/quantm $out/bin/quantm
+          '';
+        };
+      in {
+        devShells.default = shell;
+        packages.quantm = quantm;
+      }
     );
 }
 ```

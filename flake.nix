@@ -13,18 +13,18 @@
   }:
     flake-utils.lib.eachDefaultSystem (
       system: let
-        # Import nixpkgs for the current system.
+        # Import nixpkgs for the current system. This provides access to packages.
         pkgs = import nixpkgs {inherit system;};
-        # Get the go module builder.
+        # Get the go module builder. This is used to build go packages.
         buildGoModule = pkgs.buildGo123Module;
 
         # Base packages required for building and running go projects.
-        base = [
+        _base = [
           pkgs.go_1_23
         ];
 
-        # Extra packages for development.
-        dev = [
+        # Development tools and packages. These extend the base for development.
+        _dev = [
           pkgs.protobuf
           (pkgs.callPackage ./pkgs/air.nix {inherit buildGoModule;})
           (pkgs.callPackage ./pkgs/buf.nix {inherit buildGoModule;})
@@ -32,35 +32,39 @@
           (pkgs.callPackage ./pkgs/golangci-lint.nix {inherit buildGoModule;})
         ];
 
-        # Helper functions to extend base and dev packages.
+        # Helper functions to manage packages and create development shells.
         setup = {
-          # `setup.base` takes a list of packages `ext` and prepends them to the base packages.
-          # For example: `setup.base [pkgs.delve]` would return `[pkgs.delve pkgs.go_1_23]`.
-          base = ext:
-            ext ++ base;
+          # `setup.base` takes a list of packages `extend` and adds them to the beginning of the base package list.
+          # For example: `setup.base [pkgs.delve]` returns `[pkgs.delve pkgs.go_1_23]`.
+          base = extend:
+            extend ++ _base;
 
-          # `setup.shell` takes a list of base packages, a list of extra packages `ext`, and an attrset `env` of environment variables.
-          # It creates a development shell environment with all provided packages and environment variables.
-          # For example: `setup.shell base [pkgs.gotools] { MY_VAR = "test"; }`
-          # would return a development shell with go, delve, protobuf, golangci-lint, buf, and gotools installed and `MY_VAR` set to `"test"`.
-          shell = base: ext: env:
+          # `setup.shell` creates a development shell environment.
+          #
+          # It takes a list of base packages, a list of additional packages `extend`, and an attribute set `env`
+          # for environment variables. The resulting shell includes all specified packages and environment variables.
+          # For example: `setup.shell base [pkgs.gotools] { MY_VAR = "test"; }` would create a shell with
+          # go, protobuf, golangci-lint, buf, and gotools installed, and `MY_VAR` set to "test".
+          shell = base: extend: env:
             pkgs.mkShell {
-              nativeBuildInputs = [pkgs.pkgconf]; # required for building some go packages.
+              nativeBuildInputs = [pkgs.pkgconf]; # Required for building some go packages.
               buildInputs = base;
-              packages = dev ++ ext;
+              packages = extend ++ _dev;
 
               shellHook = ''
                 echo "Development environment loaded."
-                export GOROOT="${pkgs.go_1_23}/share/go"  # Correctly set GOROOT
+                export GOROOT="${pkgs.go_1_23}/share/go"  # Set GOROOT to the correct path
               '';
 
               inherit env;
             };
         };
 
-        # Seed shell environment with base packages and no extra packages or environment variables.
-        seed = setup.shell base [] {};
+        # A basic development shell with only base packages and no extra environment variables
+        seed = setup.shell _base [] {};
       in {
+        setup = setup;
+
         overlay = final: prev: {
           setup = setup;
           prev = prev;
